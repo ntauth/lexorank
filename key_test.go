@@ -26,8 +26,8 @@ func TestKey_Between_Insert(t *testing.T) {
 	next, err := ParseKey("1|b")
 	r.NoError(err)
 
-	got, ok := current.Between(*next)
-	r.True(ok)
+	got, err := Between(*current, *next)
+	r.NoError(err)
 	a.Equal("1|aU", got.String())
 }
 
@@ -41,8 +41,8 @@ func TestKey_Between_Rebalance(t *testing.T) {
 	next, err := ParseKey("1|aaaaab")
 	r.NoError(err)
 
-	got, ok := current.Between(*next)
-	r.False(ok)
+	got, err := Between(*current, *next)
+	r.Error(err)
 	r.Nil(got)
 }
 
@@ -56,8 +56,8 @@ func TestKey_Between_AtStart(t *testing.T) {
 	next, err := ParseKey("1|0")
 	r.NoError(err)
 
-	got, ok := current.Between(*next)
-	r.False(ok)
+	got, err := Between(*current, *next)
+	r.Error(err)
 	r.Nil(got)
 }
 
@@ -70,8 +70,8 @@ func TestKey_Between_AtTopClose(t *testing.T) {
 	next, err := ParseKey("0|zzzzzz")
 	r.NoError(err)
 
-	got, ok := current.Between(*next)
-	r.True(ok)
+	got, err := Between(*current, *next)
+	r.NoError(err)
 	r.Equal("0|yyyyyU", got.String())
 	r.True(sort.StringsAreSorted([]string{current.String(), got.String(), next.String()}))
 }
@@ -82,8 +82,8 @@ func TestKey_Between_AtTopNoSpace(t *testing.T) {
 	current, err := ParseKey("0|zzzzzz")
 	r.NoError(err)
 
-	got, ok := current.Between(Top)
-	r.False(ok)
+	got, err := Between(*current, Top)
+	r.Error(err)
 	r.Nil(got)
 }
 
@@ -94,14 +94,16 @@ func TestKey_After(t *testing.T) {
 	start, err := ParseKey("0|0")
 	r.NoError(err)
 
-	after, ok := start.After(10)
-	r.True(ok)
+	after, err := start.After(10)
+	r.NoError(err)
 	a.Equal("0|:", after.String())
 
 	a.True(start.Compare(*after) < 0, "expected start < after")
 
-	startIndex := decodeBase75(start.rank)
-	afterIndex := decodeBase75(after.rank)
+	startIndex, err := decodeBase75(start.rank)
+	r.NoError(err)
+	afterIndex, err := decodeBase75(after.rank)
+	r.NoError(err)
 	a.Equal(int64(10), afterIndex-startIndex)
 }
 
@@ -112,14 +114,16 @@ func TestKey_AfterLong(t *testing.T) {
 	start, err := ParseKey("0|zh2:dA")
 	r.NoError(err)
 
-	after, ok := start.After(10000)
-	r.True(ok)
+	after, err := start.After(10000)
+	r.NoError(err)
 	a.Equal("0|zh2<SZ", after.String())
 
 	a.True(start.Compare(*after) < 0, "expected start < after")
 
-	startIndex := decodeBase75(start.rank)
-	afterIndex := decodeBase75(after.rank)
+	startIndex, err := decodeBase75(start.rank)
+	r.NoError(err)
+	afterIndex, err := decodeBase75(after.rank)
+	r.NoError(err)
 	a.Equal(int64(10000), afterIndex-startIndex)
 }
 
@@ -130,14 +134,16 @@ func TestKey_Before(t *testing.T) {
 	start, err := ParseKey("0|zzzzzz")
 	r.NoError(err)
 
-	before, ok := start.Before(10)
-	r.True(ok)
+	before, err := start.Before(10)
+	r.NoError(err)
 	a.Equal("0|zzzzzp", before.String())
 
 	a.True(start.Compare(*before) > 0, "expected start > before")
 
-	startIndex := decodeBase75(start.rank)
-	afterIndex := decodeBase75(before.rank)
+	startIndex, err := decodeBase75(start.rank)
+	r.NoError(err)
+	afterIndex, err := decodeBase75(before.rank)
+	r.NoError(err)
 	a.Equal(int64(10), startIndex-afterIndex)
 }
 
@@ -148,14 +154,16 @@ func TestKey_BeforeLong(t *testing.T) {
 	start, err := ParseKey("0|zh2:dA")
 	r.NoError(err)
 
-	before, ok := start.Before(10000)
-	r.True(ok)
+	before, err := start.Before(10000)
+	r.NoError(err)
 	a.Equal("0|zh28ts", before.String())
 
 	a.True(start.Compare(*before) > 0, "expected start > before")
 
-	startIndex := decodeBase75(start.rank)
-	afterIndex := decodeBase75(before.rank)
+	startIndex, err := decodeBase75(start.rank)
+	r.NoError(err)
+	afterIndex, err := decodeBase75(before.rank)
+	r.NoError(err)
 	a.Equal(int64(10000), startIndex-afterIndex)
 }
 
@@ -168,7 +176,8 @@ func TestBase75Encoding(t *testing.T) {
 
 	rawrank := []byte(current.rank)
 
-	decoded := decodeBase75(rawrank)
+	decoded, err := decodeBase75(rawrank)
+	r.NoError(err)
 	r.Equal(int64(177978515624), decoded)
 
 	encoded := encodeBase75(decoded)
@@ -179,7 +188,8 @@ func TestKey_Random(t *testing.T) {
 	r := require.New(t)
 	// a := assert.New(t)
 
-	k := Random()
+	k, err := Random()
+	r.NoError(err)
 	r.NotEmpty(k)
 	fmt.Println(k)
 }
@@ -264,13 +274,13 @@ func TestBetween_OrderIndependent(t *testing.T) {
 	a, _ := ParseKey("0|a")
 	b, _ := ParseKey("0|z")
 
-	forward, okA := a.Between(*b)
-	if !okA {
+	forward, err := Between(*a, *b)
+	if err != nil {
 		t.Fatal("Expected a.Between(b) to succeed")
 	}
 
-	backward, okB := b.Between(*a)
-	if !okB {
+	backward, err := Between(*b, *a)
+	if err != nil {
 		t.Fatal("Expected b.Between(a) to succeed")
 	}
 

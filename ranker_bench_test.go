@@ -5,7 +5,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/Southclaws/lexorank"
+	"github.com/ntauth/lexorank"
+	"github.com/stretchr/testify/assert"
 )
 
 type reorderableNode struct {
@@ -36,7 +37,8 @@ func BenchmarkReorderableList_FullSpace(b *testing.B) {
 	b.Log("Done initialising list:", len(list))
 
 	b.ResetTimer()
-	list.Normalise()
+	err := list.Normalize()
+	assert.NoError(b, err)
 	b.StopTimer()
 
 	b.Log("Done normalising list:")
@@ -64,7 +66,8 @@ func BenchmarkReorderableList_RandomInsert(b *testing.B) {
 	list := make(lexorank.ReorderableList, 0)
 
 	b.ResetTimer()
-	list.Normalise()
+	err := list.Normalize()
+	assert.NoError(b, err)
 	b.StopTimer()
 
 	b.Log("Done normalising list:")
@@ -74,7 +77,8 @@ func BenchmarkReorderableList_RandomInsert(b *testing.B) {
 
 		key, err := list.Insert(uint(pos))
 		if err != nil {
-			list.Normalise()
+			err := list.Normalize()
+			assert.NoError(b, err)
 			key, err = list.Insert(uint(pos))
 			if err != nil {
 				b.Fatalf("Insert failed after normalisation at iteration %d: %v", i, err)

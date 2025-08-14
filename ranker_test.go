@@ -130,7 +130,8 @@ func TestReorderableList_Append(t *testing.T) {
 	}
 	last := list[len(list)-1].GetKey()
 
-	newKey := list.Append()
+	newKey, err := list.Append()
+	assert.NoError(t, err)
 
 	a.Equal(newKey.Compare(last), 1, "newKey is sorted before the first item")
 	a.Equal("1|m", newKey.String())
@@ -155,7 +156,8 @@ func TestReorderableList_AppendRebalance(t *testing.T) {
 	}
 	last := list[len(list)-1].GetKey()
 
-	newKey := list.Append()
+	newKey, err := list.Append()
+	assert.NoError(t, err)
 
 	a.Equal(newKey.Compare(last), -1, "newKey is sorted before the first item")
 	a.NotEqual(list[len(list)-1].GetKey().String(), "1|zzzzzz", "last item has been rebalanced to the mid point between end and end-1")
@@ -180,7 +182,8 @@ func TestReorderableList_Prepend(t *testing.T) {
 	}
 	first := list[0].GetKey()
 
-	newKey := list.Prepend()
+	newKey, err := list.Prepend()
+	assert.NoError(t, err)
 
 	a.Equal(newKey.Compare(first), -1, "newKey is sorted before the first item")
 }
@@ -198,7 +201,8 @@ func TestReorderableList_PrependRebalance(t *testing.T) {
 	}
 	first := list[0].GetKey()
 
-	newKey := list.Prepend()
+	newKey, err := list.Prepend()
+	assert.NoError(t, err)
 
 	a.Equal(newKey.Compare(first), -1, "newKey is sorted before the first item")
 	a.NotEqual(list[0].GetKey().String(), "1|0", "first item has been rebalanced to the mid point between index 0 and index 1")
@@ -244,7 +248,8 @@ func TestReorderableList_Append_HitsBackwardsRebalance(t *testing.T) {
 		item(0, "1|zzzzzz"), // Last key: max
 	}
 
-	newKey := list.Append() // Should trigger rebalanceFrom
+	newKey, err := list.Append() // Should trigger rebalanceFrom
+	assert.NoError(t, err)
 
 	a.True(newKey.Compare(list[0].GetKey()) > 0, "newKey must sort after existing key")
 	a.True(sort.IsSorted(list), "list must remain sorted")
@@ -261,7 +266,8 @@ func TestReorderableList_BackwardRebalanceLogic(t *testing.T) {
 		item(4, "1|aaaaae"),
 		item(5, "1|aaaaaf"),
 	}
-	list.rebalanceFrom(5, -1)
+	err := list.rebalanceFrom(5, -1)
+	assert.NoError(t, err)
 
 	a.True(sort.IsSorted(list), "list should be sorted after backward rebalance")
 }
@@ -271,7 +277,7 @@ func TestTryRebalanceFrom_BackwardFailsWithWrongBetweenOrder(t *testing.T) {
 
 	// Two adjacent keys, where Between(curr, prev) will fail
 	start, _ := ParseKey("1|aaaaaa")
-	end, _ := start.Between(TopOf(1)) // something like 1|m
+	end, _ := Between(*start, TopOf(1)) // something like 1|m
 
 	list := ReorderableList{
 		&Item{ID: 0, Rank: *start},
@@ -290,7 +296,7 @@ func TestTryRebalanceFrom_ForwardFirstPassSucceeds(t *testing.T) {
 	a := assert.New(t)
 
 	start, _ := ParseKey("1|aaaaaa")
-	mid, _ := start.Between(TopOf(1)) // enough space
+	mid, _ := Between(*start, TopOf(1)) // enough space
 
 	list := ReorderableList{
 		&Item{ID: 0, Rank: *start},
@@ -310,7 +316,8 @@ func TestTryRebalanceFrom_TightAtTop(t *testing.T) {
 		item(5, "0|UUUUUU"), item(6, "0|g"), item(7, "0|g"), item(8, "0|g"), item(9, "0|g"), item(10, "0|g"), item(11, "0|k"), item(12, "0|p"), item(13, "0|p"), item(14, "0|p"), item(15, "0|p"), item(16, "0|u"), item(17, "0|u"), item(18, "0|w"), item(19, "0|x"), item(20, "0|y"), item(21, "0|yU"), item(22, "0|yg"), item(23, "0|yp"), item(24, "0|yu"), item(25, "0|yw"), item(26, "0|yx"), item(27, "0|yy"), item(28, "0|yyU"), item(29, "0|yyg"), item(30, "0|yyp"), item(31, "0|yyu"), item(32, "0|yyw"), item(33, "0|yyx"), item(34, "0|yyx"), item(35, "0|yyy"), item(36, "0|yyyU"), item(37, "0|yyyp"), item(38, "0|yyyu"), item(39, "0|yyyw"), item(40, "0|yyyy"), item(41, "0|yyyyB"), item(42, "0|yyyyU"), item(43, "0|yyyyp"), item(44, "0|yyyyr"), item(45, "0|yyyyu"), item(46, "0|yyyyw"), item(47, "0|yyyyx"), item(48, "0|yyyyy"),
 	}
 
-	list.Normalise()
+	err := list.Normalize()
+	assert.NoError(t, err)
 
 	first := list[0]
 	last := list[len(list)-1]

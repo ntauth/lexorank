@@ -10,9 +10,9 @@ import (
 	"math"
 	"math/rand"
 	"strconv"
-)
 
-var ErrRebalance = fmt.Errorf("rebalance required")
+	"github.com/pkg/errors"
+)
 
 const (
 	Minimum  = '0'
@@ -75,7 +75,7 @@ const (
 type Key struct {
 	raw    []byte // "0|aaaaaa"
 	rank   Rank   // "aaaaaa"
-	bucket uint8  // 0
+	bucket uint8  // 0, 1, 2
 }
 
 func (k Key) String() string {
@@ -101,7 +101,7 @@ type Keys []Key
 
 type Rank []byte
 
-func (r Rank) atMin(i int) byte {
+func (r Rank) minAt(i int) byte {
 	if i >= len(r) {
 		return Minimum
 	}
@@ -109,7 +109,7 @@ func (r Rank) atMin(i int) byte {
 	return r[i]
 }
 
-func (r Rank) atMax(i int) byte {
+func (r Rank) maxAt(i int) byte {
 	if i >= len(r) {
 		return Maximum
 	}
@@ -153,7 +153,7 @@ func parseRaw(bucket uint8, rank []byte) (*Key, error) {
 }
 
 // KeyAt generates a key from a specific numeric position in the key space.
-func KeyAt(bucket uint8, f float64) Key {
+func KeyAt(bucket uint8, f float64) (Key, error) {
 	bucketChar := byte(bucket + 48)
 
 	base := float64(len(charset)) // 75
@@ -175,90 +175,96 @@ func KeyAt(bucket uint8, f float64) Key {
 
 	k, err := ParseKey(string(append([]byte{bucketChar, '|'}, key...)))
 	if err != nil {
-		panic(err)
+		return Key{}, err
 	}
 
-	return *k
+	return *k, nil
 }
 
 // Between returns a new key that is between the current key and the second key.
 // If the boolean return value is false, it indicates keys are getting too long
 // and thus a rebalance is required. "Too long" is very subjective. The limit
 // set in this library is 6 which gives you around 400k worst case re-orders.
-func (k Key) Between(to Key) (*Key, bool) {
-	if k.Compare(to) > 0 {
-		return to.Between(k)
+func Between(lhs, rhs Key) (*Key, error) {
+	if lhs.Compare(rhs) > 0 {
+		return Between(rhs, lhs)
 	}
 
-	mk := &Key{
+	midKey := &Key{
 		raw:    []byte{},
 		rank:   Rank{},
-		bucket: k.bucket,
+		bucket: lhs.bucket,
 	}
 
 	for i := 0; ; i++ {
-		prevChar := k.rank.atMin(i)
-		nextChar := to.rank.atMax(i)
+		prevChar := lhs.rank.minAt(i)
+		nextChar := rhs.rank.maxAt(i)
 
 		if prevChar == nextChar {
-			mk.rank = append(mk.rank, prevChar)
+			midKey.rank = append(midKey.rank, prevChar)
 			continue
 		}
 
 		m, ok := mid(prevChar, nextChar)
 		if !ok {
-			mk.rank = append(mk.rank, prevChar)
+			midKey.rank = append(midKey.rank, prevChar)
 			continue
 		}
 
-		mk.rank = append(mk.rank, m)
+		midKey.rank = append(midKey.rank, m)
 		break
 	}
 
-	valid := len(mk.rank) <= rankLength
+	valid := len(midKey.rank) <= rankLength
 	if !valid {
-		return nil, false
+		return nil, ErrRebalanceRequired
 	}
 
-	if string(mk.rank) >= string(to.rank) {
-		return nil, false
+	if string(midKey.rank) >= string(rhs.rank) {
+		return nil, ErrRebalanceRequired
 	}
 
 	// ASCII representation of bucket value, ranges from 0-2 so 1 basic addition works fine
-	bucketChar := k.bucket + 48
+	bucketChar := lhs.bucket + 48
 
-	mk.raw = append(mk.raw, []byte{bucketChar, '|'}...)
-	mk.raw = append(mk.raw, mk.rank...)
+	midKey.raw = append(midKey.raw, []byte{bucketChar, '|'}...)
+	midKey.raw = append(midKey.raw, midKey.rank...)
 
-	return mk, valid
+	return midKey, nil
 }
 
-func (k Key) After(distance int64) (*Key, bool) {
-	index := decodeBase75(k.rank)
+func (k Key) After(distance int64) (*Key, error) {
+	index, err := decodeBase75(k.rank)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode rank")
+	}
 	next := encodeBase75(index + distance)
 
 	n, err := parseRaw(k.bucket, next)
 	if err != nil {
-		return nil, false
+		return nil, errors.Wrap(err, "failed to parse next key")
 	}
 
-	return n, true
+	return n, nil
 }
 
-func (k Key) Before(distance int64) (*Key, bool) {
-	index := decodeBase75(k.rank)
+func (k Key) Before(distance int64) (*Key, error) {
+	index, err := decodeBase75(k.rank)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode rank")
+	}
 	if index-distance < 0 {
-		return nil, false
+		return nil, ErrOutOfBounds
 	}
 
 	next := encodeBase75(index - distance)
 
 	n, err := parseRaw(k.bucket, next)
 	if err != nil {
-		return nil, false
+		return nil, errors.Wrap(err, "failed to parse next key")
 	}
 
-	return n, true
+	return n, nil
 }
 
 func mid(a, b byte) (byte, bool) {
@@ -275,32 +281,34 @@ func mid(a, b byte) (byte, bool) {
 	return m, true
 }
 
-func decodeBase75(rank []byte) int64 {
+func decodeBase75(rank []byte) (int64, error) {
 	var index int64
 	for _, c := range rank {
 		pos := int64(bytes.IndexByte(charset, c))
 		if pos == -1 {
-			panic("invalid character in rank")
+			return 0, errors.New("invalid character in rank")
 		}
 		index = index*int64(len(charset)) + pos
 	}
-	return index
+	return index, nil
 }
 
 func encodeBase75(val int64) []byte {
 	if val == 0 {
 		return []byte{charset[0]}
 	}
+
 	var out []byte
 	for val > 0 {
 		rem := val % int64(len(charset))
 		out = append([]byte{charset[rem]}, out...)
 		val = val / int64(len(charset))
 	}
+
 	return out
 }
 
-func Random() Key {
+func Random() (Key, error) {
 	f := rand.Float64()
 	return KeyAt(0, f)
 }
@@ -371,6 +379,6 @@ func (k *Key) Scan(value any) error {
 		*k = *parsed
 		return nil
 	default:
-		return fmt.Errorf("cannot scan type %T into Key", value)
+		return errors.Errorf("cannot scan type %T into Key", value)
 	}
 }

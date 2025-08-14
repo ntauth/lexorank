@@ -1,11 +1,5 @@
 package lexorank
 
-import (
-	"fmt"
-)
-
-var ErrOutOfBounds = fmt.Errorf("out of bounds")
-
 type Orderable interface {
 	GetKey() Key
 }
@@ -46,12 +40,18 @@ func (l ReorderableList) Insert(position uint) (*Key, error) {
 	}
 
 	if position == 0 {
-		k := l.Prepend()
+		k, err := l.Prepend()
+		if err != nil {
+			return nil, err
+		}
 		return &k, nil
 	}
 
 	if position == uint(len(l)) {
-		k := l.Append()
+		k, err := l.Append()
+		if err != nil {
+			return nil, err
+		}
 		return &k, nil
 	}
 
@@ -59,8 +59,8 @@ func (l ReorderableList) Insert(position uint) (*Key, error) {
 	next := l[position].GetKey()
 
 	for range 2 {
-		k, ok := prev.Between(next)
-		if ok {
+		k, err := Between(prev, next)
+		if err == nil {
 			return k, nil
 		}
 
@@ -71,7 +71,7 @@ func (l ReorderableList) Insert(position uint) (*Key, error) {
 		next = l[position].GetKey()
 	}
 
-	return nil, fmt.Errorf("failed to insert key after rebalance")
+	return nil, ErrKeyInsertionFailedAfterRebalance
 }
 
 // Append does not change the size of the underlying list, but it may rebalance
@@ -79,56 +79,56 @@ func (l ReorderableList) Insert(position uint) (*Key, error) {
 //
 // In a worst case scenario, if the list already has a key at the maximum index,
 // the list is rebalanced to make space at the end for the new generated key.
-func (l ReorderableList) Append() Key {
+func (l ReorderableList) Append() (Key, error) {
 	if len(l) == 0 {
-		return Bottom
+		return Bottom, nil
 	}
 
 	for range 2 {
 		last := l[len(l)-1].GetKey()
-		k, ok := last.Between(TopOf(last.bucket))
-		if ok {
-			return *k
+		k, err := Between(last, TopOf(last.bucket))
+		if err == nil {
+			return *k, nil
 		}
 
 		l.rebalanceFrom(uint(len(l)-1), -1)
 	}
 
-	panic("failed to append key after rebalance")
+	return Key{}, ErrKeyInsertionFailedAfterRebalance
 }
 
 // Prepend does not change the size of the underlying list, but it may rebalance
 // if necessary. It returns a new key which is ordered before the first item.
 //
 // Same worst case scenario as Append.
-func (l ReorderableList) Prepend() Key {
+func (l ReorderableList) Prepend() (Key, error) {
 	if len(l) == 0 {
-		return Top
+		return Top, nil
 	}
 
 	for range 2 {
 		first := l[0].GetKey()
-		k, ok := BottomOf(first.bucket).Between(first)
-		if ok {
-			return *k
+		k, err := Between(BottomOf(first.bucket), first)
+		if err == nil {
+			return *k, nil
 		}
 
 		l.rebalanceFrom(0, 1)
 	}
 
-	panic("failed to prepend key after rebalance")
+	return Key{}, ErrKeyInsertionFailedAfterRebalance
 }
 
-func (l ReorderableList) rebalanceFrom(position uint, direction int) {
+func (l ReorderableList) rebalanceFrom(position uint, direction int) error {
 	ok := l.tryRebalanceFrom(position, direction)
 	if ok {
-		return
+		return nil
 	}
 
 	// If we're here, the worst case scenario was reached: every key is adjacent
 	// to the next one. We need to normalise the entire list.
 
-	l.Normalise()
+	return l.Normalize()
 }
 
 func (l ReorderableList) tryRebalanceFrom(position uint, direction int) bool {
@@ -144,8 +144,8 @@ func (l ReorderableList) tryRebalanceFrom(position uint, direction int) bool {
 			curr := l[i].GetKey()
 			next := l[i+1].GetKey()
 
-			nextKey, ok := curr.Between(next)
-			if ok {
+			nextKey, err := Between(curr, next)
+			if err == nil {
 				l[i+1].SetKey(*nextKey)
 				if i == int(position) {
 					// first pass worked, can exit early.
@@ -160,8 +160,8 @@ func (l ReorderableList) tryRebalanceFrom(position uint, direction int) bool {
 			curr := l[i].GetKey()
 			next := l[i-1].GetKey()
 
-			nextKey, ok := next.Between(curr)
-			if ok {
+			nextKey, err := Between(curr, next)
+			if err == nil {
 				l[i].SetKey(*nextKey)
 				if i == int(position) {
 					// first pass worked, can exit early.
@@ -176,14 +176,21 @@ func (l ReorderableList) tryRebalanceFrom(position uint, direction int) bool {
 	return false
 }
 
-// Normalise will distribute the keys evenly across the key space.
-func (l ReorderableList) Normalise() {
+// Normalize will distribute the keys evenly across the key space.
+func (l ReorderableList) Normalize() error {
 	for i := 0; i < len(l); i++ {
 		f := float64(i+2) / float64(len(l)+3)
 		b := l[i].GetKey().bucket
-		nextKey := KeyAt(b, f)
+
+		nextKey, err := KeyAt(b, f)
+		if err != nil {
+			return err
+		}
+
 		l[i].SetKey(nextKey)
 	}
+
+	return nil
 }
 
 func (l ReorderableList) IsSorted() bool {

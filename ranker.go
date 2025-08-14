@@ -178,7 +178,7 @@ func (l ReorderableList) tryRebalanceFrom(position uint, direction int) bool {
 
 // Normalize will distribute the keys evenly across the key space.
 func (l ReorderableList) Normalize() error {
-	for i := 0; i < len(l); i++ {
+	for i := range l {
 		f := float64(i+2) / float64(len(l)+3)
 		b := l[i].GetKey().bucket
 

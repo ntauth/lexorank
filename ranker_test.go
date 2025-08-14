@@ -59,6 +59,84 @@ func TestReorderableList_Rebalance(t *testing.T) {
 	}
 }
 
+func TestReorderableList_Rebalance_WithAnomalies_Duplicates(t *testing.T) {
+	a := assert.New(t)
+
+	original := ReorderableList{
+		item(0, "1|aaaaaa"),
+		item(1, "1|aaaaab"),
+		item(2, "1|aaaaac"),
+		item(3, "1|aaaaac"),
+		item(4, "1|aaaaad"),
+		item(5, "1|aaaaae"),
+		item(6, "1|aaaaae"),
+	}
+	data := ReorderableList{
+		item(0, "1|aaaaaa"),
+		item(1, "1|aaaaab"),
+		item(2, "1|aaaaac"),
+		item(3, "1|aaaaac"),
+		item(4, "1|aaaaad"),
+		item(5, "1|aaaaae"),
+		item(6, "1|aaaaae"),
+	}
+	a.Equal(original, data)
+
+	data.rebalanceFrom(0, 1)
+
+	a.NotEqual(original, data)
+	a.True(sort.IsSorted(data))
+
+	a.NotEqual(pretty.Sprint(original), pretty.Sprint(data))
+
+	for i := range data {
+		before := original[i]
+		after := data[i]
+
+		a.Equal(before.GetKey().bucket, after.GetKey().bucket)
+		t.Log(after.GetKey().String())
+	}
+}
+
+func TestReorderableList_Rebalance_WithAnomalies_UnsortedAndDuplicates(t *testing.T) {
+	a := assert.New(t)
+
+	original := ReorderableList{
+		item(0, "1|aaaaaa"),
+		item(1, "1|aaaaab"),
+		item(2, "1|aaaaah"),
+		item(3, "1|aaaaag"),
+		item(4, "1|aaaaad"),
+		item(5, "1|aaaaae"),
+		item(6, "1|aaaaae"),
+	}
+	data := ReorderableList{
+		item(0, "1|aaaaaa"),
+		item(1, "1|aaaaab"),
+		item(2, "1|aaaaah"),
+		item(3, "1|aaaaag"),
+		item(4, "1|aaaaad"),
+		item(5, "1|aaaaae"),
+		item(6, "1|aaaaae"),
+	}
+	a.Equal(original, data)
+
+	data.rebalanceFrom(0, 1)
+
+	a.NotEqual(original, data)
+	a.True(sort.IsSorted(data))
+
+	a.NotEqual(pretty.Sprint(original), pretty.Sprint(data))
+
+	for i := range data {
+		before := original[i]
+		after := data[i]
+
+		a.Equal(before.GetKey().bucket, after.GetKey().bucket)
+		t.Log(after.GetKey().String())
+	}
+}
+
 func TestReorderableList_Insert(t *testing.T) {
 	r := require.New(t)
 	a := assert.New(t)
@@ -86,7 +164,70 @@ func TestReorderableList_Insert(t *testing.T) {
 	a.Equal("1|aacU", newKey.String())
 }
 
-func TestInsert_TriggersRebalance(t *testing.T) {
+func TestReorderableList_WithAnomalies_Duplicates_Insert(t *testing.T) {
+	r := require.New(t)
+	a := assert.New(t)
+
+	list := ReorderableList{
+		item(0, "1|aaa"),
+		item(1, "1|aab"),
+		item(2, "1|aac"),
+		item(3, "1|aac"),
+		item(4, "1|aad"),
+		item(5, "1|aae"),
+		item(6, "1|aaf"),
+	}
+	_, err := list.Insert(3)
+	r.ErrorContains(err, "failed to insert key after rebalance")
+
+	list = ReorderableList{
+		item(0, "1|aaa"),
+		item(1, "1|aab"),
+		item(2, "1|aac"),
+		item(3, "1|aac"),
+		item(4, "1|aad"),
+		item(5, "1|aae"),
+		item(6, "1|aaf"),
+	}
+	before := list[3].GetKey()
+	after := list[4].GetKey()
+
+	newKey, err := list.Insert(4)
+	r.NoError(err)
+
+	a.Equal(newKey.Compare(before), 1, "placed after index 3")
+	a.Equal(newKey.Compare(after), -1, "placed before index 4")
+	a.Equal("1|aacU", newKey.String())
+}
+
+func TestReorderableList_WithAnomalies_Unsorted_Insert(t *testing.T) {
+	r := require.New(t)
+	a := assert.New(t)
+
+	list := ReorderableList{
+		item(0, "1|aaa"),
+		item(1, "1|aac"),
+		item(2, "1|aab"),
+		item(3, "1|aad"),
+		item(4, "1|aae"),
+		item(5, "1|aaf"),
+	}
+	before := list[2].GetKey()
+	after := list[3].GetKey()
+
+	newKey, err := list.Insert(3)
+	r.NoError(err)
+
+	t.Log("before", before)
+	t.Log("newKey", newKey)
+	t.Log("after:", after)
+
+	a.Equal(newKey.Compare(before), 1, "placed after index 1")
+	a.Equal(newKey.Compare(after), -1, "placed before index 2")
+	a.Equal("1|aac", newKey.String())
+}
+
+func TestReorderableList_Insert_TriggersRebalance(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
 

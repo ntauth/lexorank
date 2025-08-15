@@ -175,7 +175,7 @@ func TestReorderableList_TryRebalanceFrom_ProductionConfig(t *testing.T) {
 
 	// Two adjacent keys, where Between(curr, prev) will fail
 	start, _ := ParseKey("1|aaaaaa")
-	end, _ := Between(*start, TopOf(1, config), config) // something like 1|m
+	end, _ := Between(*start, TopOf(1), config) // something like 1|m
 
 	list := ReorderableList{
 		&Item{ID: 0, Rank: *start},
@@ -395,7 +395,7 @@ func TestReorderableList_AppendRebalance_ProductionConfig(t *testing.T) {
 		t.Log("list", i, list[i].GetKey().String())
 	}
 	t.Log("newKey", newKey.String())
-	t.Log("topKey", TopOf(0, config).String())
+	t.Log("topKey", TopOf(0).String())
 
 	// Verify that the configuration was respected during rebalancing
 	for _, item := range list {

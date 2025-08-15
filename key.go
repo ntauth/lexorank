@@ -28,48 +28,39 @@ var (
 	defaultBase = big.NewInt(75)
 )
 
-func TopOf(b uint8, config *Config) Key {
-	rank := make([]byte, config.MaxRankLength)
-	for i := range rank {
-		rank[i] = Maximum
-	}
+func TopOf(bucket uint8) Key {
+	rank := []byte{Maximum}
 
-	raw := append([]byte{byte(b + '0'), '|'}, rank...)
+	raw := append([]byte{byte(bucket + '0'), '|'}, rank...)
 
 	return Key{
 		raw:    raw,
 		rank:   rank,
-		bucket: b,
+		bucket: bucket,
 	}
 }
 
-func MiddleOf(b uint8, config *Config) Key {
-	rank := make([]byte, config.MaxRankLength)
-	for i := range rank {
-		rank[i] = Midpoint
-	}
+func MiddleOf(bucket uint8) Key {
+	rank := []byte{Midpoint}
 
-	raw := append([]byte{byte(b + '0'), '|'}, rank...)
+	raw := append([]byte{byte(bucket + '0'), '|'}, rank...)
 
 	return Key{
 		raw:    raw,
 		rank:   rank,
-		bucket: b,
+		bucket: bucket,
 	}
 }
 
-func BottomOf(b uint8, config *Config) Key {
-	rank := make([]byte, config.MaxRankLength)
-	for i := range rank {
-		rank[i] = Minimum
-	}
+func BottomOf(bucket uint8) Key {
+	rank := []byte{Minimum}
 
-	raw := append([]byte{byte(b + '0'), '|'}, rank...)
+	raw := append([]byte{byte(bucket + '0'), '|'}, rank...)
 
 	return Key{
 		raw:    raw,
 		rank:   rank,
-		bucket: b,
+		bucket: bucket,
 	}
 }
 
@@ -428,12 +419,12 @@ func makeKey(bucket uint8, rank []byte) *Key {
 func SmartAppend(last Key, config *Config) (*Key, error) {
 	switch config.AppendStrategy {
 	case AppendStrategyDefault:
-		return Between(last, TopOf(last.bucket, config), config)
+		return Between(last, TopOf(last.bucket), config)
 	case AppendStrategyStep:
 		step := big.NewInt(config.StepSize)
 		return last.Add(step)
 	default:
-		return Between(last, TopOf(last.bucket, config), config)
+		return Between(last, TopOf(last.bucket), config)
 	}
 }
 
@@ -441,12 +432,12 @@ func SmartAppend(last Key, config *Config) (*Key, error) {
 func SmartPrepend(first Key, config *Config) (*Key, error) {
 	switch config.AppendStrategy {
 	case AppendStrategyDefault:
-		return Between(BottomOf(first.bucket, config), first, config)
+		return Between(BottomOf(first.bucket), first, config)
 	case AppendStrategyStep:
 		step := big.NewInt(config.StepSize)
 		return first.Subtract(step)
 	default:
-		return Between(BottomOf(first.bucket, config), first, config)
+		return Between(BottomOf(first.bucket), first, config)
 	}
 }
 

@@ -31,3 +31,26 @@ func TestKey_Between_ProductionConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestKey_Between_BottomAndTop_ProductionConfig(t *testing.T) {
+	r := require.New(t)
+	a := assert.New(t)
+
+	cfg := ProductionConfig()
+
+	lhs := BottomOf(0)
+	rhs := TopOf(0)
+
+	maxIterationsBeforeRebalancingIsRequired := 897
+	for i := range maxIterationsBeforeRebalancingIsRequired {
+		mid, err := Between(lhs, rhs, cfg)
+		if i == maxIterationsBeforeRebalancingIsRequired-1 {
+			t.Log("final mid point	", lhs.String())
+			r.ErrorIs(err, ErrRebalanceRequired)
+		} else {
+			r.NoError(err)
+			a.True(mid.Compare(lhs) > 0 && mid.Compare(rhs) < 0, "mid should be between lhs and rhs")
+			lhs = *mid
+		}
+	}
+}

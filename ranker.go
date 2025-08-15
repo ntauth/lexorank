@@ -94,7 +94,7 @@ func (l ReorderableList) Insert(position uint, config *Config) (*Key, error) {
 // specified configuration for append strategy.
 func (l ReorderableList) Append(config *Config) (Key, error) {
 	if len(l) == 0 {
-		return BottomOf(0, config), nil
+		return BottomOf(0), nil
 	}
 
 	for range 2 {
@@ -115,7 +115,7 @@ func (l ReorderableList) Append(config *Config) (Key, error) {
 // specified configuration.
 func (l ReorderableList) Prepend(config *Config) (Key, error) {
 	if len(l) == 0 {
-		return TopOf(0, config), nil
+		return TopOf(0), nil
 	}
 
 	for range 2 {

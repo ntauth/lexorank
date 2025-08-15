@@ -283,7 +283,7 @@ func TestReorderableList_Append(t *testing.T) {
 		t.Log("list", i, list[i].GetKey().String())
 	}
 	t.Log("newKey", newKey.String())
-	t.Log("topKey", TopOf(0, DefaultConfig()).String())
+	t.Log("topKey", TopOf(0).String())
 }
 
 func TestReorderableList_AppendRebalance(t *testing.T) {
@@ -309,7 +309,7 @@ func TestReorderableList_AppendRebalance(t *testing.T) {
 		t.Log("list", i, list[i].GetKey().String())
 	}
 	t.Log("newKey", newKey.String())
-	t.Log("topKey", TopOf(0, DefaultConfig()).String())
+	t.Log("topKey", TopOf(0).String())
 }
 
 func TestReorderableList_Prepend(t *testing.T) {
@@ -420,7 +420,7 @@ func TestTryRebalanceFrom_BackwardFailsWithWrongBetweenOrder(t *testing.T) {
 
 	// Two adjacent keys, where Between(curr, prev) will fail
 	start, _ := ParseKey("1|aaaaaa")
-	end, _ := Between(*start, TopOf(1, DefaultConfig()), DefaultConfig()) // something like 1|m
+	end, _ := Between(*start, TopOf(1), DefaultConfig()) // something like 1|m
 
 	list := ReorderableList{
 		&Item{ID: 0, Rank: *start},
@@ -439,7 +439,7 @@ func TestTryRebalanceFrom_ForwardFirstPassSucceeds(t *testing.T) {
 	a := assert.New(t)
 
 	start, _ := ParseKey("1|aaaaaa")
-	mid, _ := Between(*start, TopOf(1, DefaultConfig()), DefaultConfig()) // enough space
+	mid, _ := Between(*start, TopOf(1), DefaultConfig()) // enough space
 
 	list := ReorderableList{
 		&Item{ID: 0, Rank: *start},

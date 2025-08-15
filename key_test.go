@@ -11,9 +11,9 @@ import (
 )
 
 func TestKey_Defaults(t *testing.T) {
-	fmt.Println(BottomOf(0, DefaultConfig()))
-	fmt.Println(TopOf(0, DefaultConfig()))
-	fmt.Println(MiddleOf(0, DefaultConfig()))
+	fmt.Println(BottomOf(0))
+	fmt.Println(TopOf(0))
+	fmt.Println(MiddleOf(0))
 }
 
 func TestKey_Between_Insert(t *testing.T) {
@@ -85,7 +85,7 @@ func TestKey_Between_AtTopNoSpace(t *testing.T) {
 	current, err := ParseKey("0|zzzzzz")
 	r.NoError(err)
 
-	got, err := Between(*current, TopOf(0, DefaultConfig()), DefaultConfig())
+	got, err := Between(*current, TopOf(0), DefaultConfig())
 	r.Error(err)
 	r.Nil(got)
 }
@@ -198,7 +198,7 @@ func TestKey_Random(t *testing.T) {
 }
 
 func TestMarshalUnmarshalText(t *testing.T) {
-	orig := MiddleOf(0, DefaultConfig())
+	orig := MiddleOf(0)
 	text, err := orig.MarshalText()
 	if err != nil {
 		t.Fatalf("marshal text failed: %v", err)
@@ -215,7 +215,7 @@ func TestMarshalUnmarshalText(t *testing.T) {
 }
 
 func TestMarshalUnmarshalJSON(t *testing.T) {
-	orig := MiddleOf(0, DefaultConfig())
+	orig := MiddleOf(0)
 	data, err := json.Marshal(orig)
 	if err != nil {
 		t.Fatalf("marshal json failed: %v", err)
@@ -232,7 +232,7 @@ func TestMarshalUnmarshalJSON(t *testing.T) {
 }
 
 func TestSQLDriverValuer(t *testing.T) {
-	orig := MiddleOf(0, DefaultConfig())
+	orig := MiddleOf(0)
 	val, err := orig.Value()
 	if err != nil {
 		t.Fatalf("value failed: %v", err)
@@ -247,7 +247,7 @@ func TestSQLDriverValuer(t *testing.T) {
 }
 
 func TestSQLScanner(t *testing.T) {
-	orig := MiddleOf(0, DefaultConfig())
+	orig := MiddleOf(0)
 	input := orig.String()
 
 	var k Key

@@ -13,6 +13,10 @@ const (
 
 // Config holds configuration for the lexorank system
 type Config struct {
+	// AutoNormalize determines if the list should be normalized automatically
+	// if local rebalancing fails.
+	AutoNormalize bool
+
 	// MaxRankLength is the maximum allowed length for ranks (default: 6)
 	MaxRankLength int
 
@@ -26,6 +30,7 @@ type Config struct {
 // DefaultConfig returns the default configuration
 func DefaultConfig() *Config {
 	return &Config{
+		AutoNormalize:  true,
 		MaxRankLength:  6,
 		AppendStrategy: AppendStrategyDefault,
 		StepSize:       1,
@@ -57,7 +62,8 @@ func (c *Config) WithStepSize(step int64) *Config {
 // longer ranks and step-based strategies.
 func ProductionConfig() *Config {
 	return &Config{
-		MaxRankLength:  128, // Allow for longer ranks
+		AutoNormalize:  false, // Disable auto-normalization in production
+		MaxRankLength:  128,   // Allow for longer ranks
 		AppendStrategy: AppendStrategyStep,
 		StepSize:       1000, // Every new key is 1000 steps away from the previous key
 	}

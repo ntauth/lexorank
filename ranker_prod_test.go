@@ -276,27 +276,8 @@ func TestReorderableList_Rebalance_WithAnomalies_UnsortedAndDuplicates_Productio
 	}
 	a.Equal(original, data)
 
-	data.rebalanceFrom(0, 1, config)
-
-	a.NotEqual(original, data)
-	// Since we're using keys at maximum length, rebalancing should fail
-	// and fall back to normalization, which will produce a sorted list
-	a.True(sort.IsSorted(data), "list should be sorted after normalization")
-
-	a.NotEqual(pretty.Sprint(original), pretty.Sprint(data))
-
-	for i := range data {
-		before := original[i]
-		after := data[i]
-
-		a.Equal(before.GetKey().bucket, after.GetKey().bucket)
-		t.Log(after.GetKey().String())
-	}
-
-	// Verify that the configuration was respected during rebalancing
-	for _, item := range data {
-		a.True(len(item.GetKey().rank) <= config.MaxRankLength, "all keys should respect MaxRankLength")
-	}
+	err := data.rebalanceFrom(0, 1, config)
+	a.ErrorIs(err, ErrNormalizationRequired) // Automatic normalization is disabled in ProductionConfig
 }
 
 func TestReorderableList_WithAnomalies_Duplicates_Insert_ProductionConfig(t *testing.T) {

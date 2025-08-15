@@ -1,7 +1,10 @@
 package lexorank
 
-import "fmt"
+import "github.com/pkg/errors"
 
-var ErrOutOfBounds = fmt.Errorf("out of bounds")
-var ErrRebalanceRequired = fmt.Errorf("rebalance required")
-var ErrKeyInsertionFailedAfterRebalance = fmt.Errorf("failed to insert key after rebalance")
+var (
+	ErrOutOfBounds                      = errors.New("out of bounds")
+	ErrRebalanceRequired                = errors.New("rebalance required")
+	ErrNormalizationRequired            = errors.New("normalization required")
+	ErrKeyInsertionFailedAfterRebalance = errors.New("failed to insert key after rebalance")
+)

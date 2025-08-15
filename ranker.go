@@ -192,6 +192,10 @@ func (l ReorderableList) tryRebalanceFrom(position uint, direction int, config *
 // Normalize will distribute the keys evenly across the key space
 // using the specified configuration for precision settings.
 func (l ReorderableList) Normalize(config *Config) error {
+	if !config.AutoNormalize {
+		return ErrNormalizationRequired
+	}
+
 	for i := range l {
 		f := float64(i+2) / float64(len(l)+3)
 		b := l[i].GetKey().bucket

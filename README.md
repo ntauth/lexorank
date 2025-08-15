@@ -1,75 +1,131 @@
 # Lexorank
 
-A production-ready Go implementation of the Lexorank sort-key system — originally designed by Atlassian to enable infinitely re-orderable lists with minimal rebalancing.
+A Go implementation of Lexorank for efficient list sorting and reordering.
 
-Lexorank allows you to insert new items between existing ones, and only rebalances when you truly run out of space. This library gives you a `Key` type and a `ReorderableList` utility to manage ordered collections safely and efficiently.
+## What is Lexorank?
 
-> Lexorank is used in [Storyden](https://storyden.org) to power drag-and-drop reordering of tree-structured or table-structured content. It handles thousands of inserts, normalizations, and concurrent reorders in production environments.
-
----
+Lexorank is a sorting key system that allows you to insert items between any two existing items without reordering the entire list. It's perfect for drag-and-drop interfaces, task management systems, and any application where users need to reorder items frequently.
 
 ## Features
 
-- Lexorank `Key`: Stable, lexicographically ordered string key
-- Insert / Append / Prepend: Add new items without needing to re-fetch the entire list
-- Partial rebalancing: If there's no room between two keys, rebalance just the nearby items
-- Full normalization: Optionally normalize the entire list with evenly spaced keys
-- Key generation with precision limit: Tells you to rebalance when key bounds are hit
-- `Reorderable` interface: Integrate with your own data types
+- **Efficient Insertions**: Insert items between any two positions without reordering
+- **Automatic Rebalancing**: Keys are automatically redistributed when space runs out
+- **Variable Precision**: Keys can grow in length to accommodate more items
+- **Configurable Strategies**: Choose how new keys are generated when appending/prepending
+- **Database Ready**: Implements SQL driver interfaces for easy database integration
 
----
+## Core Concepts
 
-## Usage Pattern 1: Minimal context insert
+### Lexorank Keys
 
-If you're inserting an item and you already know the IDs (or keys) of the adjacent items, you can do the following:
+A lexorank key consists of:
+- **Bucket**: A namespace identifier (0, 1, 2)
+- **Rank**: A string that determines the sort order
+
+### How It Works
+
+1. **Initial Setup**: Items get evenly distributed keys across the key space
+2. **Insertion**: New items get keys between existing ones
+3. **Rebalancing**: When keys get too long, the system redistributes them evenly
+4. **Precision**: Keys can grow in length to accommodate more items
+
+## Usage
+
+### Basic Operations
 
 ```go
-midKey, ok := leftKey.Between(rightKey)
-if !ok {
-    // No possible key between left and right - run a rebalance of the set
+package main
+
+import "github.com/ntauth/lexorank"
+
+// Create a list of items
+items := []lexorank.Reorderable{
+    &MyItem{key: lexorank.Key{raw: []byte("0|aaaaaa"), rank: []byte("aaaaaa"), bucket: 0}},
+    &MyItem{key: lexorank.Key{raw: []byte("0|zzzzzz"), rank: []byte("zzzzzz"), bucket: 0}},
+}
+
+// Create a reorderable list
+list := lexorank.NewReorderableList(items, lexorank.DefaultConfig())
+
+// Insert a new item at position 1
+newKey, err := list.Insert(1)
+if err != nil {
+    panic(err)
+}
+
+// Append an item to the end
+newKey, err = list.Append()
+if err != nil {
+    panic(err)
 }
 ```
 
-This avoids loading the full list and is ideal for quick, isolated inserts.
+### Configuration
 
----
-
-## Usage Pattern 2: List-based insertion with rebalancing
-
-If you can load the full list of siblings (e.g., all items in a table, or children of a parent), you can use the `ReorderableList` utility:
+Configure how the system behaves:
 
 ```go
-list := lexorank.ReorderableList(<yourdata>)
-newKey := list.Insert(3) // Insert at position 3
+// Default configuration (between-based strategy)
+config := lexorank.DefaultConfig()
+
+// Production configuration (step-based strategy)
+config := lexorank.ProductionConfig().
+    WithAppendStrategy(lexorank.AppendStrategyStep).
+    WithStepSize(1000)
+
+// Custom configuration
+config := lexorank.DefaultConfig().
+    WithMaxRankLength(12).
+    WithStepSize(500)
 ```
 
-This approach:
+### Append Strategies
 
-- Uses `.Between()` under the hood
-- If needed, rebalances a small section of the list
-- If still no space is available, performs a `.Normalise()` (safe for up to hundreds of thousands of items)
+Choose how new keys are generated:
 
-You can also manually normalise (distribute all keys evenly across a set)
+- **Default Strategy**: Uses `Between(last, TopOf(bucket))` for predictable spacing
+- **Step Strategy**: Uses `After(stepSize)` for append, `Before(stepSize)` for prepend
 
 ```go
-list := lexorank.ReorderableList(<yourdata>)
-list.Normalise()
-// write `list` back to your DB
+// Step-based strategy for predictable spacing
+config := lexorank.ProductionConfig().
+    WithAppendStrategy(lexorank.AppendStrategyStep).
+    WithStepSize(1000)
+
+list := lexorank.NewReorderableList(items, config)
+
+// Append will use last.After(1000)
+// Prepend will use first.Before(1000)
+newKey, err := list.AppendWithConfig(config)
 ```
 
-This library does not implement any adapters or persistence, so you are responsible for writing back the changes to your `ReorderableList` instance to your database.
+## Why big.Int?
 
-## Rebalancing and Precision
+Lexorank fundamentally involves finding integers between other integers. As keys grow longer, these integers can exceed fixed-size types:
 
-The current key character set is 75 characters (0-z ASCII) and the key length is 6 characters, which gives you:
+- **Base 75, length 6**: `75^6 ≈ 17.7 trillion` (fits in `int64`)
+- **Base 75, length 8**: `75^8 ≈ 9.8 quintillion` (exceeds `int64`)
+- **Base 75, length 12**: `75^12 ≈ 5.4 × 10^22` (way beyond `int64`)
 
-- Approximately 177 billion unique keys
-- Around 400,000 worst-case inserts between two keys before a rebalance
+Using `big.Int` ensures mathematical correctness for any key length without overflow.
 
-This makes Lexorank quite efficient for large document spaces with lots of drag/drop/move operations.
+## Database Integration
 
-> If you run into these limits and require a configurable limit, open an issue or PR!
+Keys implement SQL driver interfaces for easy database storage:
 
-## Buckets
+```go
+// Store in database
+key := lexorank.Key{raw: []byte("0|aaaaaa"), rank: []byte("aaaaaa"), bucket: 0}
+db.Exec("INSERT INTO items (rank_key) VALUES (?)", key)
 
-The library retains buckets internally, but they are currently not used by the underlying algorithm. Buckets were originally part of Atlassian's implementation to allow sharded normalization across large datasets. If you need to change the bucket, you can simply mutate the first character of a key.
+// Load from database
+var key lexorank.Key
+db.QueryRow("SELECT rank_key FROM items WHERE id = ?", id).Scan(&key)
+```
+
+## Performance
+
+- **Insertions**: O(1) average case, O(n) worst case (when rebalancing)
+- **Rebalancing**: Automatically triggered when needed
+- **Memory**: Keys are compact byte arrays
+- **Precision**: Grows automatically as needed

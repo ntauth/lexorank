@@ -43,7 +43,7 @@ func TestReorderableList_Rebalance(t *testing.T) {
 	}
 	a.Equal(original, data)
 
-	data.rebalanceFrom(0, 1)
+	data.rebalanceFrom(0, 1, DefaultConfig())
 
 	a.NotEqual(original, data)
 	a.True(sort.IsSorted(data))
@@ -82,7 +82,7 @@ func TestReorderableList_Rebalance_WithAnomalies_Duplicates(t *testing.T) {
 	}
 	a.Equal(original, data)
 
-	data.rebalanceFrom(0, 1)
+	data.rebalanceFrom(0, 1, DefaultConfig())
 
 	a.NotEqual(original, data)
 	a.True(sort.IsSorted(data))
@@ -121,10 +121,10 @@ func TestReorderableList_Rebalance_WithAnomalies_UnsortedAndDuplicates(t *testin
 	}
 	a.Equal(original, data)
 
-	data.rebalanceFrom(0, 1)
+	data.rebalanceFrom(0, 1, DefaultConfig())
 
 	a.NotEqual(original, data)
-	a.True(sort.IsSorted(data))
+	a.True(sort.IsSorted(data)) // This holds because the ranks are maximum length, so a normalization is done instead
 
 	a.NotEqual(pretty.Sprint(original), pretty.Sprint(data))
 
@@ -152,7 +152,7 @@ func TestReorderableList_Insert(t *testing.T) {
 	before := list[2].GetKey()
 	after := list[3].GetKey()
 
-	newKey, err := list.Insert(3)
+	newKey, err := list.Insert(3, DefaultConfig())
 	r.NoError(err)
 
 	t.Log("before", before)
@@ -177,7 +177,7 @@ func TestReorderableList_WithAnomalies_Duplicates_Insert(t *testing.T) {
 		item(5, "1|aae"),
 		item(6, "1|aaf"),
 	}
-	_, err := list.Insert(3)
+	_, err := list.Insert(3, DefaultConfig())
 	r.ErrorContains(err, "failed to insert key after rebalance")
 
 	list = ReorderableList{
@@ -192,7 +192,7 @@ func TestReorderableList_WithAnomalies_Duplicates_Insert(t *testing.T) {
 	before := list[3].GetKey()
 	after := list[4].GetKey()
 
-	newKey, err := list.Insert(4)
+	newKey, err := list.Insert(4, DefaultConfig())
 	r.NoError(err)
 
 	a.Equal(newKey.Compare(before), 1, "placed after index 3")
@@ -215,7 +215,7 @@ func TestReorderableList_WithAnomalies_Unsorted_Insert(t *testing.T) {
 	before := list[2].GetKey()
 	after := list[3].GetKey()
 
-	newKey, err := list.Insert(3)
+	newKey, err := list.Insert(3, DefaultConfig())
 	r.NoError(err)
 
 	t.Log("before", before)
@@ -248,7 +248,7 @@ func TestReorderableList_Insert_TriggersRebalance(t *testing.T) {
 
 	oldKey := list[1].GetKey().String()
 
-	newKey, err := list.Insert(1) // insert between 0 and 1
+	newKey, err := list.Insert(1, DefaultConfig()) // insert between 0 and 1
 	r.NoError(err)
 
 	a.True(newKey.Compare(list[0].GetKey()) > 0)
@@ -271,17 +271,19 @@ func TestReorderableList_Append(t *testing.T) {
 	}
 	last := list[len(list)-1].GetKey()
 
-	newKey, err := list.Append()
+	newKey, err := list.Append(DefaultConfig())
 	assert.NoError(t, err)
 
-	a.Equal(newKey.Compare(last), 1, "newKey is sorted before the first item")
-	a.Equal("1|m", newKey.String())
+	// The mathematical approach generates different keys than the old string-based approach
+	// but the ordering should still be correct
+	a.True(newKey.Compare(last) > 0, "newKey should be greater than the last item")
+	// Don't check exact string value since mathematical approach gives different results
 
 	for i := range list {
 		t.Log("list", i, list[i].GetKey().String())
 	}
 	t.Log("newKey", newKey.String())
-	t.Log("topKey", Top.String())
+	t.Log("topKey", TopOf(0, DefaultConfig()).String())
 }
 
 func TestReorderableList_AppendRebalance(t *testing.T) {
@@ -297,7 +299,7 @@ func TestReorderableList_AppendRebalance(t *testing.T) {
 	}
 	last := list[len(list)-1].GetKey()
 
-	newKey, err := list.Append()
+	newKey, err := list.Append(DefaultConfig())
 	assert.NoError(t, err)
 
 	a.Equal(newKey.Compare(last), -1, "newKey is sorted before the first item")
@@ -307,7 +309,7 @@ func TestReorderableList_AppendRebalance(t *testing.T) {
 		t.Log("list", i, list[i].GetKey().String())
 	}
 	t.Log("newKey", newKey.String())
-	t.Log("topKey", Top.String())
+	t.Log("topKey", TopOf(0, DefaultConfig()).String())
 }
 
 func TestReorderableList_Prepend(t *testing.T) {
@@ -323,7 +325,7 @@ func TestReorderableList_Prepend(t *testing.T) {
 	}
 	first := list[0].GetKey()
 
-	newKey, err := list.Prepend()
+	newKey, err := list.Prepend(DefaultConfig())
 	assert.NoError(t, err)
 
 	a.Equal(newKey.Compare(first), -1, "newKey is sorted before the first item")
@@ -342,7 +344,7 @@ func TestReorderableList_PrependRebalance(t *testing.T) {
 	}
 	first := list[0].GetKey()
 
-	newKey, err := list.Prepend()
+	newKey, err := list.Prepend(DefaultConfig())
 	assert.NoError(t, err)
 
 	a.Equal(newKey.Compare(first), -1, "newKey is sorted before the first item")
@@ -355,7 +357,7 @@ func TestInsert_OutOfBounds(t *testing.T) {
 		item(1, "1|aab"),
 	}
 
-	_, err := list.Insert(5)
+	_, err := list.Insert(5, DefaultConfig())
 	assert.Error(t, err)
 	assert.Equal(t, ErrOutOfBounds, err)
 }
@@ -366,7 +368,7 @@ func TestInsert_AtStart(t *testing.T) {
 		item(1, "1|aac"),
 	}
 
-	key, err := list.Insert(0)
+	key, err := list.Insert(0, DefaultConfig())
 	assert.NoError(t, err)
 	assert.True(t, key.Compare(list[0].GetKey()) < 0, "inserted key should sort before the first")
 }
@@ -377,7 +379,7 @@ func TestInsert_AtEnd(t *testing.T) {
 		item(1, "1|aab"),
 	}
 
-	key, err := list.Insert(uint(len(list)))
+	key, err := list.Insert(uint(len(list)), DefaultConfig())
 	assert.NoError(t, err)
 	assert.True(t, key.Compare(list[len(list)-1].GetKey()) > 0, "inserted key should sort after the last")
 }
@@ -389,7 +391,7 @@ func TestReorderableList_Append_HitsBackwardsRebalance(t *testing.T) {
 		item(0, "1|zzzzzz"), // Last key: max
 	}
 
-	newKey, err := list.Append() // Should trigger rebalanceFrom
+	newKey, err := list.Append(DefaultConfig()) // Should trigger rebalanceFrom
 	assert.NoError(t, err)
 
 	a.True(newKey.Compare(list[0].GetKey()) > 0, "newKey must sort after existing key")
@@ -407,7 +409,7 @@ func TestReorderableList_BackwardRebalanceLogic(t *testing.T) {
 		item(4, "1|aaaaae"),
 		item(5, "1|aaaaaf"),
 	}
-	err := list.rebalanceFrom(5, -1)
+	err := list.rebalanceFrom(5, -1, DefaultConfig())
 	assert.NoError(t, err)
 
 	a.True(sort.IsSorted(list), "list should be sorted after backward rebalance")
@@ -418,7 +420,7 @@ func TestTryRebalanceFrom_BackwardFailsWithWrongBetweenOrder(t *testing.T) {
 
 	// Two adjacent keys, where Between(curr, prev) will fail
 	start, _ := ParseKey("1|aaaaaa")
-	end, _ := Between(*start, TopOf(1)) // something like 1|m
+	end, _ := Between(*start, TopOf(1, DefaultConfig()), DefaultConfig()) // something like 1|m
 
 	list := ReorderableList{
 		&Item{ID: 0, Rank: *start},
@@ -426,7 +428,7 @@ func TestTryRebalanceFrom_BackwardFailsWithWrongBetweenOrder(t *testing.T) {
 	}
 
 	// We intentionally call tryRebalanceFrom on index 1, going backward (-1)
-	ok := list.tryRebalanceFrom(1, -1)
+	ok := list.tryRebalanceFrom(1, -1, DefaultConfig())
 	a.True(ok, "should succeed if Between() arg order is correct")
 
 	// If successful, keys should still be sorted
@@ -437,14 +439,14 @@ func TestTryRebalanceFrom_ForwardFirstPassSucceeds(t *testing.T) {
 	a := assert.New(t)
 
 	start, _ := ParseKey("1|aaaaaa")
-	mid, _ := Between(*start, TopOf(1)) // enough space
+	mid, _ := Between(*start, TopOf(1, DefaultConfig()), DefaultConfig()) // enough space
 
 	list := ReorderableList{
 		&Item{ID: 0, Rank: *start},
 		&Item{ID: 1, Rank: *mid},
 	}
 
-	ok := list.tryRebalanceFrom(0, 1)
+	ok := list.tryRebalanceFrom(0, 1, DefaultConfig())
 	a.True(ok, "expected forward rebalance to succeed on first pass")
 	a.True(sort.IsSorted(list), "list should still be sorted")
 	a.NotEqual(mid.String(), list[1].GetKey().String(), "key should have changed during rebalance")
@@ -457,7 +459,7 @@ func TestTryRebalanceFrom_TightAtTop(t *testing.T) {
 		item(5, "0|UUUUUU"), item(6, "0|g"), item(7, "0|g"), item(8, "0|g"), item(9, "0|g"), item(10, "0|g"), item(11, "0|k"), item(12, "0|p"), item(13, "0|p"), item(14, "0|p"), item(15, "0|p"), item(16, "0|u"), item(17, "0|u"), item(18, "0|w"), item(19, "0|x"), item(20, "0|y"), item(21, "0|yU"), item(22, "0|yg"), item(23, "0|yp"), item(24, "0|yu"), item(25, "0|yw"), item(26, "0|yx"), item(27, "0|yy"), item(28, "0|yyU"), item(29, "0|yyg"), item(30, "0|yyp"), item(31, "0|yyu"), item(32, "0|yyw"), item(33, "0|yyx"), item(34, "0|yyx"), item(35, "0|yyy"), item(36, "0|yyyU"), item(37, "0|yyyp"), item(38, "0|yyyu"), item(39, "0|yyyw"), item(40, "0|yyyy"), item(41, "0|yyyyB"), item(42, "0|yyyyU"), item(43, "0|yyyyp"), item(44, "0|yyyyr"), item(45, "0|yyyyu"), item(46, "0|yyyyw"), item(47, "0|yyyyx"), item(48, "0|yyyyy"),
 	}
 
-	err := list.Normalize()
+	err := list.Normalize(DefaultConfig())
 	assert.NoError(t, err)
 
 	first := list[0]

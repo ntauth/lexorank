@@ -29,18 +29,33 @@ type Reorderable interface {
 // Reorderable list is assumed to be already ordered upon instantiation.
 type ReorderableList []Reorderable
 
+// Config holds the configuration for this list
+type ReorderableListConfig struct {
+	*Config
+}
+
+// NewReorderableList creates a new ReorderableList with the given configuration
+func NewReorderableList(items []Reorderable, config *Config) ReorderableList {
+	return ReorderableList(items)
+}
+
+// DefaultReorderableList creates a new ReorderableList with default configuration
+func DefaultReorderableList(items []Reorderable) ReorderableList {
+	return NewReorderableList(items, DefaultConfig())
+}
+
 // Purely for testing purposes.
 func (a ReorderableList) Len() int           { return len(a) }
 func (a ReorderableList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ReorderableList) Less(i, j int) bool { return a[i].GetKey().String() < a[j].GetKey().String() }
 
-func (l ReorderableList) Insert(position uint) (*Key, error) {
+func (l ReorderableList) Insert(position uint, config *Config) (*Key, error) {
 	if position > uint(len(l)) {
 		return nil, ErrOutOfBounds
 	}
 
 	if position == 0 {
-		k, err := l.Prepend()
+		k, err := l.Prepend(config)
 		if err != nil {
 			return nil, err
 		}
@@ -48,7 +63,7 @@ func (l ReorderableList) Insert(position uint) (*Key, error) {
 	}
 
 	if position == uint(len(l)) {
-		k, err := l.Append()
+		k, err := l.Append(config)
 		if err != nil {
 			return nil, err
 		}
@@ -59,12 +74,12 @@ func (l ReorderableList) Insert(position uint) (*Key, error) {
 	next := l[position].GetKey()
 
 	for range 2 {
-		k, err := Between(prev, next)
+		k, err := Between(prev, next, config)
 		if err == nil {
 			return k, nil
 		}
 
-		l.rebalanceFrom(position, 1)
+		l.rebalanceFrom(position, 1, config)
 
 		// refresh prev/next keys
 		prev = l[position-1].GetKey()
@@ -75,52 +90,49 @@ func (l ReorderableList) Insert(position uint) (*Key, error) {
 }
 
 // Append does not change the size of the underlying list, but it may rebalance
-// if necessary. It returns a new key which is ordered after the last item.
-//
-// In a worst case scenario, if the list already has a key at the maximum index,
-// the list is rebalanced to make space at the end for the new generated key.
-func (l ReorderableList) Append() (Key, error) {
+// if necessary. It returns a new key which is ordered after the last item using the
+// specified configuration for append strategy.
+func (l ReorderableList) Append(config *Config) (Key, error) {
 	if len(l) == 0 {
-		return Bottom, nil
+		return BottomOf(0, config), nil
 	}
 
 	for range 2 {
 		last := l[len(l)-1].GetKey()
-		k, err := Between(last, TopOf(last.bucket))
+		k, err := SmartAppend(last, config)
 		if err == nil {
 			return *k, nil
 		}
 
-		l.rebalanceFrom(uint(len(l)-1), -1)
+		l.rebalanceFrom(uint(len(l)-1), -1, config)
 	}
 
 	return Key{}, ErrKeyInsertionFailedAfterRebalance
 }
 
 // Prepend does not change the size of the underlying list, but it may rebalance
-// if necessary. It returns a new key which is ordered before the first item.
-//
-// Same worst case scenario as Append.
-func (l ReorderableList) Prepend() (Key, error) {
+// if necessary. It returns a new key which is ordered before the first item using the
+// specified configuration.
+func (l ReorderableList) Prepend(config *Config) (Key, error) {
 	if len(l) == 0 {
-		return Top, nil
+		return TopOf(0, config), nil
 	}
 
 	for range 2 {
 		first := l[0].GetKey()
-		k, err := Between(BottomOf(first.bucket), first)
+		k, err := SmartPrepend(first, config)
 		if err == nil {
 			return *k, nil
 		}
 
-		l.rebalanceFrom(0, 1)
+		l.rebalanceFrom(0, 1, config)
 	}
 
 	return Key{}, ErrKeyInsertionFailedAfterRebalance
 }
 
-func (l ReorderableList) rebalanceFrom(position uint, direction int) error {
-	ok := l.tryRebalanceFrom(position, direction)
+func (l ReorderableList) rebalanceFrom(position uint, direction int, config *Config) error {
+	ok := l.tryRebalanceFrom(position, direction, config)
 	if ok {
 		return nil
 	}
@@ -128,10 +140,10 @@ func (l ReorderableList) rebalanceFrom(position uint, direction int) error {
 	// If we're here, the worst case scenario was reached: every key is adjacent
 	// to the next one. We need to normalise the entire list.
 
-	return l.Normalize()
+	return l.Normalize(config)
 }
 
-func (l ReorderableList) tryRebalanceFrom(position uint, direction int) bool {
+func (l ReorderableList) tryRebalanceFrom(position uint, direction int, config *Config) bool {
 	if direction > 0 && position >= uint(len(l)-1) {
 		return false // at end of list
 	}
@@ -144,7 +156,7 @@ func (l ReorderableList) tryRebalanceFrom(position uint, direction int) bool {
 			curr := l[i].GetKey()
 			next := l[i+1].GetKey()
 
-			nextKey, err := Between(curr, next)
+			nextKey, err := Between(curr, next, config)
 			if err == nil {
 				l[i+1].SetKey(*nextKey)
 				if i == int(position) {
@@ -158,9 +170,10 @@ func (l ReorderableList) tryRebalanceFrom(position uint, direction int) bool {
 	} else {
 		for i := int(position); i > 0; i-- {
 			curr := l[i].GetKey()
-			next := l[i-1].GetKey()
+			prev := l[i-1].GetKey()
 
-			nextKey, err := Between(curr, next)
+			// For backward rebalancing, we need prev < curr, so swap arguments
+			nextKey, err := Between(prev, curr, config)
 			if err == nil {
 				l[i].SetKey(*nextKey)
 				if i == int(position) {
@@ -169,20 +182,21 @@ func (l ReorderableList) tryRebalanceFrom(position uint, direction int) bool {
 				}
 			}
 
-			// If not OK, continue to rebalance forwards by shifting every key
+			// If not OK, continue to rebalance backwards by shifting every key
 		}
 	}
 
 	return false
 }
 
-// Normalize will distribute the keys evenly across the key space.
-func (l ReorderableList) Normalize() error {
+// Normalize will distribute the keys evenly across the key space
+// using the specified configuration for precision settings.
+func (l ReorderableList) Normalize(config *Config) error {
 	for i := range l {
 		f := float64(i+2) / float64(len(l)+3)
 		b := l[i].GetKey().bucket
 
-		nextKey, err := KeyAt(b, f)
+		nextKey, err := KeyAt(b, f, config)
 		if err != nil {
 			return err
 		}

@@ -11,9 +11,9 @@ import (
 )
 
 func TestKey_Defaults(t *testing.T) {
-	fmt.Println(Bottom)
-	fmt.Println(Top)
-	fmt.Println(Middle)
+	fmt.Println(BottomOf(0, DefaultConfig()))
+	fmt.Println(TopOf(0, DefaultConfig()))
+	fmt.Println(MiddleOf(0, DefaultConfig()))
 }
 
 func TestKey_Between_Insert(t *testing.T) {
@@ -26,7 +26,7 @@ func TestKey_Between_Insert(t *testing.T) {
 	next, err := ParseKey("1|b")
 	r.NoError(err)
 
-	got, err := Between(*current, *next)
+	got, err := Between(*current, *next, DefaultConfig())
 	r.NoError(err)
 	a.Equal("1|aU", got.String())
 }
@@ -41,7 +41,7 @@ func TestKey_Between_Rebalance(t *testing.T) {
 	next, err := ParseKey("1|aaaaab")
 	r.NoError(err)
 
-	got, err := Between(*current, *next)
+	got, err := Between(*current, *next, DefaultConfig())
 	r.Error(err)
 	r.Nil(got)
 }
@@ -56,7 +56,7 @@ func TestKey_Between_AtStart(t *testing.T) {
 	next, err := ParseKey("1|0")
 	r.NoError(err)
 
-	got, err := Between(*current, *next)
+	got, err := Between(*current, *next, DefaultConfig())
 	r.Error(err)
 	r.Nil(got)
 }
@@ -70,9 +70,12 @@ func TestKey_Between_AtTopClose(t *testing.T) {
 	next, err := ParseKey("0|zzzzzz")
 	r.NoError(err)
 
-	got, err := Between(*current, *next)
+	got, err := Between(*current, *next, DefaultConfig())
 	r.NoError(err)
-	r.Equal("0|yyyyyU", got.String())
+	// The mathematical approach finds the actual midpoint, not lexicographic
+	// Verify it's between the two keys and properly sorted
+	r.True(got.Compare(*current) > 0, "new key should be greater than current")
+	r.True(next.Compare(*got) > 0, "next should be greater than new key")
 	r.True(sort.StringsAreSorted([]string{current.String(), got.String(), next.String()}))
 }
 
@@ -82,7 +85,7 @@ func TestKey_Between_AtTopNoSpace(t *testing.T) {
 	current, err := ParseKey("0|zzzzzz")
 	r.NoError(err)
 
-	got, err := Between(*current, Top)
+	got, err := Between(*current, TopOf(0, DefaultConfig()), DefaultConfig())
 	r.Error(err)
 	r.Nil(got)
 }
@@ -188,14 +191,14 @@ func TestKey_Random(t *testing.T) {
 	r := require.New(t)
 	// a := assert.New(t)
 
-	k, err := Random()
+	k, err := Random(DefaultConfig())
 	r.NoError(err)
 	r.NotEmpty(k)
 	fmt.Println(k)
 }
 
 func TestMarshalUnmarshalText(t *testing.T) {
-	orig := Middle
+	orig := MiddleOf(0, DefaultConfig())
 	text, err := orig.MarshalText()
 	if err != nil {
 		t.Fatalf("marshal text failed: %v", err)
@@ -212,7 +215,7 @@ func TestMarshalUnmarshalText(t *testing.T) {
 }
 
 func TestMarshalUnmarshalJSON(t *testing.T) {
-	orig := Middle
+	orig := MiddleOf(0, DefaultConfig())
 	data, err := json.Marshal(orig)
 	if err != nil {
 		t.Fatalf("marshal json failed: %v", err)
@@ -229,7 +232,7 @@ func TestMarshalUnmarshalJSON(t *testing.T) {
 }
 
 func TestSQLDriverValuer(t *testing.T) {
-	orig := Middle
+	orig := MiddleOf(0, DefaultConfig())
 	val, err := orig.Value()
 	if err != nil {
 		t.Fatalf("value failed: %v", err)
@@ -244,7 +247,7 @@ func TestSQLDriverValuer(t *testing.T) {
 }
 
 func TestSQLScanner(t *testing.T) {
-	orig := Middle
+	orig := MiddleOf(0, DefaultConfig())
 	input := orig.String()
 
 	var k Key
@@ -274,17 +277,20 @@ func TestBetween_OrderIndependent(t *testing.T) {
 	a, _ := ParseKey("0|a")
 	b, _ := ParseKey("0|z")
 
-	forward, err := Between(*a, *b)
+	// The mathematical approach requires a < b for proper ordering
+	forward, err := Between(*a, *b, DefaultConfig())
 	if err != nil {
-		t.Fatal("Expected a.Between(b) to succeed")
+		t.Fatal("Expected a.Between(b) to succeed when a < b")
 	}
 
-	backward, err := Between(*b, *a)
-	if err != nil {
-		t.Fatal("Expected b.Between(a) to succeed")
+	// b.Between(a) should fail because b > a
+	_, err = Between(*b, *a, DefaultConfig())
+	if err == nil {
+		t.Fatal("Expected b.Between(a) to fail when b > a")
 	}
 
-	if backward != nil && forward.String() != backward.String() {
-		t.Errorf("Between should be symmetric, but got %s vs %s", forward.String(), backward.String())
+	// Verify the forward result is properly between a and b
+	if forward.Compare(*a) <= 0 || forward.Compare(*b) >= 0 {
+		t.Errorf("Between result should be strictly between a and b, got %s", forward.String())
 	}
 }

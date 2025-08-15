@@ -37,7 +37,7 @@ func BenchmarkReorderableList_FullSpace(b *testing.B) {
 	b.Log("Done initialising list:", len(list))
 
 	b.ResetTimer()
-	err := list.Normalize()
+	err := list.Normalize(lexorank.DefaultConfig())
 	assert.NoError(b, err)
 	b.StopTimer()
 
@@ -66,7 +66,7 @@ func BenchmarkReorderableList_RandomInsert(b *testing.B) {
 	list := make(lexorank.ReorderableList, 0)
 
 	b.ResetTimer()
-	err := list.Normalize()
+	err := list.Normalize(lexorank.DefaultConfig())
 	assert.NoError(b, err)
 	b.StopTimer()
 
@@ -75,11 +75,11 @@ func BenchmarkReorderableList_RandomInsert(b *testing.B) {
 	for i := 0; i < maxItems; i++ {
 		pos := r.Intn(len(list) + 1)
 
-		key, err := list.Insert(uint(pos))
+		key, err := list.Insert(uint(pos), lexorank.DefaultConfig())
 		if err != nil {
-			err := list.Normalize()
+			err := list.Normalize(lexorank.DefaultConfig())
 			assert.NoError(b, err)
-			key, err = list.Insert(uint(pos))
+			key, err = list.Insert(uint(pos), lexorank.DefaultConfig())
 			if err != nil {
 				b.Fatalf("Insert failed after normalisation at iteration %d: %v", i, err)
 			}
